@@ -22,12 +22,50 @@ export default function FileViewPage() {
     }));
   }
 
-  const hadnelSign = () => {
-    const signature = prompt('Enter your signature');
-    if (signature) {
-      setSignature(signature);
+  const handleSign = () => {
+    const signatureText = prompt('Enter your signature');
+    if (signatureText) {
+      setSignature(signatureText);
     }
   }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!signature) {
+      alert('Please add a signature first');
+      return;
+    }
+
+    if (!usercredentials.email) {
+      alert('Please enter your email');
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/files/${uuid}/sign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          signatureData: signature,
+          userEmail: usercredentials.email
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sign document');
+      }
+
+      const data = await response.json();
+      alert('Document signed successfully!');
+    } catch (error) {
+      console.error('Error signing document:', error);
+      alert('Failed to sign document. Please try again.');
+    }
+  };
+
   useEffect(() => {
     const fetchFileInfo = async () => {
       try {
@@ -68,7 +106,7 @@ export default function FileViewPage() {
       </div>
 
       <div className="file-actions">
-        <form action={`http://localhost:3001/api/files/${uuid}/sign`} method="POST" className="signature-form">
+        <form onSubmit={handleSubmit} className="signature-form">
           <div className="form-group">
             <input 
               type="text" 
@@ -90,7 +128,7 @@ export default function FileViewPage() {
           <div className="form-group">
             <button 
               type="button" 
-              onClick={hadnelSign}
+              onClick={handleSign}
               className="btn btn-secondary"
             >
               Add Signature

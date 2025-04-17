@@ -23,20 +23,29 @@ const db = new sqlite3.Database(path.join(__dirname, 'files.db'), (err) => {
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
       file_path TEXT NOT NULL
     )`);
+
+    // Create users table if it doesn't exist
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL
     )`);
+
+    // Create signatures table if it doesn't exist
     db.run(`CREATE TABLE IF NOT EXISTS signatures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       file_id INTEGER NOT NULL,
-      user_id INTEGER NOT NULL,
+      user_email TEXT NOT NULL,
       signature_data TEXT NOT NULL,
       signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (file_id) REFERENCES files(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`);
+      FOREIGN KEY (file_id) REFERENCES files(id)
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating signatures table:', err);
+      } else {
+        console.log('Database tables created successfully');
+      }
+    });
   }
 });
 const checkUser = (email, password) => {
@@ -149,6 +158,47 @@ app.post('/api/upload-pc', upload.single('file'), handleUploadError, (req, res) 
       });
     }
   );
+});
+
+// Define api/files/:uuid/sign
+app.post('/api/files/:uuid/sign', express.json(), async (req, res) => {
+  const { signatureData, userEmail } = req.body;
+  const { uuid } = req.params;
+
+  if (!signatureData || !userEmail) {
+    return res.status(400).json({ error: 'Signature data and user email are required' });
+  }
+
+  try {
+    // Check if file exists
+    const file = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM files WHERE uuid = ?', [uuid], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Insert signature
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO signatures (file_id, user_email, signature_data) VALUES (?, ?, ?)',
+        [file.id, userEmail, signatureData],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'File signed successfully' });
+  } catch (error) {
+    console.error('Error signing file:', error);
+    res.status(500).json({ error: 'Error signing file' });
+  }
 });
 
 // Get all uploaded files
